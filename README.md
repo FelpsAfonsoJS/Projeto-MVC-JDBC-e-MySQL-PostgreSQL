@@ -1,226 +1,140 @@
-# Sistema de Oficina Mecânica
+# 🐾 Sistema de Clínica Veterinária
 
-## Visão Geral
-Sistema completo e interativo para gerenciar **clientes**, **veículos** e **ordens de serviço (OS)** em uma oficina mecânica, com persistência em **MySQL** via JDBC. O sistema permite:
-- Cadastrar clientes e veículos
-- Abrir OS por **placa** (apenas se o veículo estiver cadastrado)
-- Adicionar **serviços** a uma OS
-- **Iniciar** e **fechar** a manutenção (status e cálculo de valores)
-- Consultar o **histórico** de OS por placa, período, nome e CPF do cliente
+Projeto acadêmico desenvolvido em **Java**, aplicando o padrão **MVC** com persistência de dados via **JDBC** e banco de dados **MySQL**.
 
-> Observação: o sistema **não** implementa “pausar e retomar” a OS em estados intermediários diferentes de `EM_MANUTENCAO` nem “dar baixa em OS abertas” via menu. Os estados suportados são apenas `ABERTA`, `EM_MANUTENCAO` e `FECHADA`.
+O sistema resolve o problema de uma clínica veterinária que ainda controla tudo em fichas de papel, permitindo cadastrar tutores, seus animais e registrar consultas, com histórico de atendimentos por animal.
 
-## Requisitos
-- Java 17 ou superior
-- Maven 3.6+
-- MySQL 5.7+ rodando em `127.0.0.1:3307`
-- Banco de dados `OficinaMecanica` criado (ver instruções abaixo)
+---
 
-## Configuração
+## 📋 Sobre o projeto
 
-### 1. Configurar Banco de Dados MySQL
-Execute os comandos SQL no MySQL Workbench:
+Cenário proposto: uma clínica veterinária precisa digitalizar seu controle de tutores, animais e consultas, evitando erros como registrar atendimentos em animais errados quando dois pets têm o mesmo nome, mas donos diferentes.
+
+A solução implementada permite:
+
+- ✅ Cadastrar tutores (donos dos animais)
+- ✅ Cadastrar animais vinculados a um tutor
+- ✅ Registrar consultas veterinárias
+- ✅ Consultar o histórico de atendimentos de um animal específico
+- ✅ Listar todos os animais de um tutor
+
+---
+
+## 🏗️ Arquitetura
+
+O projeto segue o padrão **MVC (Model-View-Controller)**, com a camada de persistência isolada em `repository`:
+
+```
+src/main/java/com/clinicavet/
+├── model/        → Entidades: Tutor, Animal, Consulta
+├── repository/    → CRUD de cada entidade via SQL puro (JDBC)
+├── service/       → Regras de negócio e validações
+├── controller/    → Orquestra a chamada entre a ação e o service
+├── util/          → Conexao.java (configuração da conexão com o MySQL)
+└── Main.java      → Simula o fluxo completo: Tutor → Animal → Consulta
+```
+
+---
+
+## 🗃️ Modelo de dados
+
+| Entidade | Campos | Relacionamento |
+|---|---|---|
+| **Tutor** | id, nome, endereço, telefone | Cadastro independente |
+| **Animal** | id, nome, espécie, raça, id_tutor | N:1 com Tutor |
+| **Consulta** | id, id_animal, data, motivo, valor | N:1 com Animal |
 
 ```sql
-create database OficinaMecanica;
-use OficinaMecanica;
+CREATE DATABASE IF NOT EXISTS clinica_veterinaria;
+USE clinica_veterinaria;
 
-create table cliente(
-  id int auto_increment primary key,
-  nome varchar(100) not null,
-  cpf varchar(14) not null unique,
-  telefone varchar(20)
+CREATE TABLE tutor (
+    id        INT AUTO_INCREMENT PRIMARY KEY,
+    nome      VARCHAR(150) NOT NULL,
+    endereco  VARCHAR(255) NOT NULL,
+    telefone  VARCHAR(20)  NOT NULL
 );
 
-create table veiculo(
-  id int auto_increment primary key,
-  placa varchar(10) not null unique,
-  modelo varchar(100) not null,
-  ano int not null,
-  cliente_id int not null,
-  constraint fk_cliente
-  foreign key(cliente_id)
-  references cliente(id)
+CREATE TABLE animal (
+    id        INT AUTO_INCREMENT PRIMARY KEY,
+    nome      VARCHAR(100) NOT NULL,
+    especie   VARCHAR(50)  NOT NULL,
+    raca      VARCHAR(50),
+    id_tutor  INT NOT NULL,
+    CONSTRAINT fk_animal_tutor FOREIGN KEY (id_tutor)
+        REFERENCES tutor (id) ON DELETE CASCADE
 );
 
-CREATE TABLE ordem_servico(
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    veiculo_id INT NOT NULL,
-    descricao TEXT,
-    status VARCHAR(30),
-    data_abertura DATETIME,
-    entrada_manutencao DATETIME,
-    saida_manutencao DATETIME,
-    valor_hora DECIMAL(10,2),
-    valor_mao_obra DECIMAL(10,2),
-    valor_servicos DECIMAL(10,2),
-    valor_total DECIMAL(10,2),
-    FOREIGN KEY(veiculo_id)
-    REFERENCES veiculo(id)
-);
-
-CREATE TABLE servico(
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    ordem_servico_id INT,
-    descricao VARCHAR(200),
-    valor DECIMAL(10,2),
-    FOREIGN KEY(ordem_servico_id)
-    REFERENCES ordem_servico(id)
+CREATE TABLE consulta (
+    id        INT AUTO_INCREMENT PRIMARY KEY,
+    id_animal INT NOT NULL,
+    data      DATE NOT NULL,
+    motivo    VARCHAR(255) NOT NULL,
+    valor     DECIMAL(10,2) NOT NULL,
+    CONSTRAINT fk_consulta_animal FOREIGN KEY (id_animal)
+        REFERENCES animal (id) ON DELETE CASCADE,
+    CONSTRAINT chk_consulta_valor CHECK (valor >= 0)
 );
 ```
 
-### 2. Configurar Credenciais MySQL
-Edite `src/main/resources/db.properties`:
+---
 
-```properties
-url=jdbc:mysql://127.0.0.1:3307/OficinaMecanica?useSSL=false&serverTimezone=UTC
-user=seu_usuario
-password=sua_senha
-```
+## ⚙️ Regras de negócio
 
-### 3. Compilar
-```bash
-mvn -DskipTests clean compile
-```
+- Um tutor pode ter vários animais cadastrados
+- Cada animal pertence a exatamente um tutor (identificação por `id`, evitando confusão entre animais com nomes iguais)
+- Não é permitido registrar consulta para um animal não cadastrado
+- O valor da consulta não pode ser negativo
+- É possível consultar o histórico de atendimentos de um animal específico
+- É possível listar todos os animais de um tutor
 
-## Executar
-### Via IDE
-Abra `Main.java` e clique em **Run**.
+---
 
-### Via Maven
-```bash
-mvn -Dexec.mainClass=Main exec:java
-```
+## 🚀 Tecnologias utilizadas
 
-## Estrutura de Menu
-```
-MENU PRINCIPAL
-├─ 1. Cadastro
-│  ├─ 1.1 Cadastrar Cliente
-│  └─ 1.2 Cadastrar Veículo
-├─ 2. Buscar Clientes / Veículos
-│  ├─ 2.1 Buscar por Nome de Cliente
-│  ├─ 2.2 Buscar por CPF de Cliente
-│  ├─ 2.3 Buscar por Placa de Veículo
-│  └─ (listar veículos por cliente)
-└─ 3. Ordem de Serviço
-   ├─ 3.1 Abrir Nova Ordem de Serviço
-   │  ├─ Informar placa
-   │  ├─ Informar descrição da OS
-   │  ├─ Adicionar 0..N serviços (descrição e valor)
-   │  ├─ Iniciar manutenção (opcional)
-   │  └─ Fechar manutenção (opcional; ao fechar calcula valores)
-   └─ 3.2 Histórico de OS
-      ├─ Buscar por placa
-      ├─ Buscar por período (YYYY-MM-DD)
-      ├─ Buscar por nome de cliente
-      └─ Buscar por CPF de cliente
-```
+- Java 17
+- Maven
+- JDBC (sem ORM — SQL puro)
+- MySQL 8
 
-## Funcionalidades Principais
+---
 
-### 1) Cadastro
-- **Cadastrar Cliente**: nome, CPF e telefone
-- **Cadastrar Veículo**: placa, modelo, ano e cliente (o cliente precisa existir)
+## ▶️ Como executar
 
-### 2) Buscar
-- **Clientes**
-  - por nome (busca parcial)
-  - por CPF (exata)
-- **Veículos**
-  - por placa (exata)
-  - listar veículos de um cliente
+### Pré-requisitos
+- JDK 17+
+- MySQL rodando localmente
+- Maven (ou usar o suporte integrado do IntelliJ)
 
-### 3) Ordem de Serviço
-- **Abrir OS (por placa)**  
-  - Requer **placa** informada
-  - Valida que o **veículo existe**
-  - Salva uma OS com status inicial `ABERTA`
+### Passo a passo
 
-- **Adicionar Serviços à OS**
-  - Permite adicionar múltiplos serviços à OS aberta
-  - Cada serviço possui `descricao` e `valor`
+1. Clone o repositório:
+   ```bash
+   git clone https://github.com/seu-usuario/clinica-veterinaria.git
+   ```
 
-- **Iniciar manutenção**
-  - Define `status = EM_MANUTENCAO`
-  - Registra `entrada_manutencao = agora`
+2. Execute o script SQL (seção acima) no seu MySQL para criar o banco e as tabelas.
 
-- **Fechar manutenção**
-  - Define `status = FECHADA`
-  - Registra `saida_manutencao = agora`
-  - Recalcula valores e persiste:
-    - **valorMaoObra** = horas * `valor_hora` (padrão: 60,00)
-    - **valorTotal** = valorMaoObra + valorServicos
+3. Configure suas credenciais em `src/main/java/com/clinicavet/util/Conexao.java`:
+   ```java
+   private static final String USUARIO = "root";
+   private static final String SENHA = "sua_senha";
+   ```
 
-- **Histórico de OS**
-  - Exibe detalhes (ID, placa, cliente, descrição, status, datas, mão de obra, serviços, total)
-  - Soma o **total geral** ao final da consulta
+4. Abra o projeto no IntelliJ (`File → Open` → selecione a pasta com o `pom.xml`).
 
-## Regras de Negócio (alinhadas ao sistema)
+5. Execute a classe `Main.java`.
 
-1. **Cliente → Veículos**
-   - Um cliente pode ter **vários veículos**.
-2. **Veículo → Cliente**
-   - Um veículo pertence a **um único cliente** (`veiculo.cliente_id`).
-3. **Veículo deve existir para abrir OS**
-   - O sistema não permite abrir OS para **placa não cadastrada**.
-4. **Estados da OS**
-   - `ABERTA` → `EM_MANUTENCAO` → `FECHADA`
-5. **Cálculo de valores**
-   - `valorServicos` = soma dos serviços vinculados à OS
-   - `valorMaoObra` = duração (`saida_manutencao - entrada_manutencao`) em horas × `valor_hora`
-   - `valorTotal` = `valorMaoObra + valorServicos`
-6. **Valor do serviço não é validado como não-negativo**
-   - O sistema atual **não bloqueia** valores negativos na entrada (não há validação em `InputValidator`).
-   - Logo, a regra “valor do serviço não pode ser negativo” **não está implementada** como validação.
+A `Main` simula o fluxo completo: cria um tutor, cadastra animais vinculados a ele, registra consultas e demonstra as validações de negócio (consulta para animal inexistente e valor negativo).
 
-> Se você quiser, a próxima etapa pode ser implementar essa validação no `InputValidator` e/ou no `OrdemServicoController.adicionarServico`.
+---
 
-## Tabelas Identificadas (campos mínimos)
+## 📌 Status do projeto
 
-### `cliente`
-- `id` (PK)
-- `nome` (NOT NULL)
-- `cpf` (NOT NULL, UNIQUE)
-- `telefone` (opcional)
+Projeto acadêmico finalizado, desenvolvido para fins de aprendizado de **JDBC**, **MVC** e **SQL** com Java.
 
-### `veiculo`
-- `id` (PK)
-- `placa` (NOT NULL, UNIQUE)
-- `modelo` (NOT NULL)
-- `ano` (NOT NULL)
-- `cliente_id` (NOT NULL, FK → `cliente.id`)
+---
 
-### `ordem_servico`
-- `id` (PK)
-- `veiculo_id` (NOT NULL, FK → `veiculo.id`)
-- `descricao`
-- `status` (ex.: `ABERTA`, `EM_MANUTENCAO`, `FECHADA`)
-- `data_abertura`
-- `entrada_manutencao`
-- `saida_manutencao`
-- `valor_hora`
-- `valor_mao_obra`
-- `valor_servicos`
-- `valor_total`
+## 👤 Autor
 
-### `servico`
-- `id` (PK)
-- `ordem_servico_id` (FK → `ordem_servico.id`, pode ficar NULL no processo de criação/associação dependendo do fluxo)
-- `descricao`
-- `valor`
-
-## Seed de exemplo
-O arquivo `seed.sql` cria dados para:
-- clientes
-- veículos
-- uma ordem de serviço em status `ABERTA`
-- serviços vinculados a essa OS
-
-## Versão
-2.0 - Junho 2026 (Menu hierárquico, histórico completo, gerenciamento de dados, transferência de veículos)
-
-## Notas Técnicas
-- Persistência: JDBC com `ConnectionFactory`
-- Regras: aplicadas no fluxo do controller e no cálculo do modelo `OrdemServico`
-- Enum: `StatusOS` (`ABERTA`, `EM_MANUTENCAO`, `FECHADA`)
+Desenvolvido por **Alisson** — estudante da UMFG Faculdade.
