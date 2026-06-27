@@ -1,21 +1,48 @@
-# Cenário 1 – Sistema de Clínica Veterinária
+# 🐾 Sistema de Clínica Veterinária
 
-## 1. Contexto
+Projeto acadêmico desenvolvido em **Java**, aplicando o padrão **MVC** com persistência de dados via **JDBC** e banco de dados **MySQL**.
 
-Pequena clínica veterinária que hoje controla tudo em fichas de papel. O sistema deve
-permitir cadastrar tutores e seus animais, e registrar consultas (o movimento do
-sistema), evitando os problemas relatados: dificuldade de localizar o histórico de um
-animal e confusão entre animais de nomes iguais pertencentes a tutores diferentes.
+O sistema resolve o problema de uma clínica veterinária que ainda controla tudo em fichas de papel, permitindo cadastrar tutores, seus animais e registrar consultas, com histórico de atendimentos por animal.
 
-## 2. Entidades identificadas e campos mínimos
+---
 
-| Entidade | Campos mínimos | Observação |
+## 📋 Sobre o projeto
+
+Cenário proposto: uma clínica veterinária precisa digitalizar seu controle de tutores, animais e consultas, evitando erros como registrar atendimentos em animais errados quando dois pets têm o mesmo nome, mas donos diferentes.
+
+A solução implementada permite:
+
+- ✅ Cadastrar tutores (donos dos animais)
+- ✅ Cadastrar animais vinculados a um tutor
+- ✅ Registrar consultas veterinárias
+- ✅ Consultar o histórico de atendimentos de um animal específico
+- ✅ Listar todos os animais de um tutor
+
+---
+
+## 🏗️ Arquitetura
+
+O projeto segue o padrão **MVC (Model-View-Controller)**, com a camada de persistência isolada em `repository`:
+
+```
+src/main/java/com/clinicavet/
+├── model/        → Entidades: Tutor, Animal, Consulta
+├── repository/    → CRUD de cada entidade via SQL puro (JDBC)
+├── service/       → Regras de negócio e validações
+├── controller/    → Orquestra a chamada entre a ação e o service
+├── util/          → Conexao.java (configuração da conexão com o MySQL)
+└── Main.java      → Simula o fluxo completo: Tutor → Animal → Consulta
+```
+
+---
+
+## 🗃️ Modelo de dados
+
+| Entidade | Campos | Relacionamento |
 |---|---|---|
-| **Tutor** | id, nome, endereço, telefone | Cadastro simples — existe de forma independente |
-| **Animal** | id, nome, espécie, raça, id_tutor | Cadastro simples — vinculado obrigatoriamente a um tutor |
-| **Consulta** | id, id_animal, data, motivo, valor | Movimento — depende do animal (e indiretamente do tutor) |
-
-## 3. Script SQL (DDL) — MySQL
+| **Tutor** | id, nome, endereço, telefone | Cadastro independente |
+| **Animal** | id, nome, espécie, raça, id_tutor | N:1 com Tutor |
+| **Consulta** | id, id_animal, data, motivo, valor | N:1 com Animal |
 
 ```sql
 CREATE DATABASE IF NOT EXISTS clinica_veterinaria;
@@ -35,8 +62,7 @@ CREATE TABLE animal (
     raca      VARCHAR(50),
     id_tutor  INT NOT NULL,
     CONSTRAINT fk_animal_tutor FOREIGN KEY (id_tutor)
-        REFERENCES tutor (id)
-        ON DELETE CASCADE
+        REFERENCES tutor (id) ON DELETE CASCADE
 );
 
 CREATE TABLE consulta (
@@ -46,46 +72,69 @@ CREATE TABLE consulta (
     motivo    VARCHAR(255) NOT NULL,
     valor     DECIMAL(10,2) NOT NULL,
     CONSTRAINT fk_consulta_animal FOREIGN KEY (id_animal)
-        REFERENCES animal (id)
-        ON DELETE CASCADE,
+        REFERENCES animal (id) ON DELETE CASCADE,
     CONSTRAINT chk_consulta_valor CHECK (valor >= 0)
 );
 ```
 
-**Relacionamentos:**
-- `tutor 1 — N animal`: um tutor pode ter vários animais; cada animal pertence a exatamente um tutor (`id_tutor`).
-- `animal 1 — N consulta`: um animal pode ter várias consultas; cada consulta pertence a exatamente um animal (`id_animal`).
+---
 
-## 4. Regras de negócio identificadas
+## ⚙️ Regras de negócio
 
-1. **Tutor é cadastro independente.** Pode existir no sistema sem nenhum animal vinculado. Campos obrigatórios: nome, endereço e telefone.
-2. **Um tutor pode ter mais de um animal.** A relação é 1:N entre tutor e animal.
-3. **Cada animal pertence a um único tutor**, identificado pelo `id_tutor` (chave estrangeira). Isso resolve o problema relatado de animais com nomes iguais e donos diferentes: a identificação correta nunca é feita pelo nome do animal isoladamente, mas pelo seu `id` único, vinculado ao `id` do tutor correto.
-4. **Não é permitido registrar consulta para um animal que não esteja cadastrado.** Antes de salvar a consulta, o sistema verifica se o `id_animal` informado existe na tabela `animal`.
-5. **O valor da consulta não pode ser negativo.** Validado tanto na camada de `service` (Java) quanto via `CHECK` no banco de dados.
-6. **É possível consultar o histórico de atendimentos de um animal específico**, listando todas as consultas vinculadas ao `id_animal`.
-7. **É possível listar todos os animais de um tutor específico**, atendendo ao caso de uso "tutor liga novamente e quero ver todos os animais dele".
-8. **Toda consulta precisa informar:** animal atendido, data do atendimento, motivo do atendimento e valor cobrado — todos campos obrigatórios.
+- Um tutor pode ter vários animais cadastrados
+- Cada animal pertence a exatamente um tutor (identificação por `id`, evitando confusão entre animais com nomes iguais)
+- Não é permitido registrar consulta para um animal não cadastrado
+- O valor da consulta não pode ser negativo
+- É possível consultar o histórico de atendimentos de um animal específico
+- É possível listar todos os animais de um tutor
 
-## 5. Estrutura do projeto (MVC)
+---
 
-```
-src/main/java/com/clinicavet/
-├── model/        -> Tutor, Animal, Consulta
-├── repository/   -> TutorRepository, AnimalRepository, ConsultaRepository (CRUD via JDBC)
-├── service/      -> TutorService, AnimalService, ConsultaService (regras de negócio)
-├── controller/   -> TutorController, AnimalController, ConsultaController
-├── util/         -> Conexao.java (configuração JDBC)
-└── Main.java     -> simula o fluxo: Tutor → Animal → Consulta
-```
+## 🚀 Tecnologias utilizadas
 
-## 6. Como executar
+- Java 17
+- Maven
+- JDBC (sem ORM — SQL puro)
+- MySQL 8
 
-1. Crie o banco de dados executando o script SQL da seção 3 em sua instância MySQL.
-2. Ajuste usuário/senha/host em `src/main/java/com/clinicavet/util/Conexao.java`.
-3. Importe o projeto no IntelliJ como projeto Maven (`pom.xml` na raiz).
-4. Execute a classe `com.clinicavet.Main`.
+---
 
-A `Main` demonstra o encadeamento completo exigido: primeiro cria o tutor, depois o
-animal vinculado a ele, depois registra a consulta — além de demonstrar as regras
-de negócio (rejeição de consulta para animal inexistente e de valor negativo).
+## ▶️ Como executar
+
+### Pré-requisitos
+- JDK 17+
+- MySQL rodando localmente
+- Maven (ou usar o suporte integrado do IntelliJ)
+
+### Passo a passo
+
+1. Clone o repositório:
+   ```bash
+   git clone https://github.com/seu-usuario/clinica-veterinaria.git
+   ```
+
+2. Execute o script SQL (seção acima) no seu MySQL para criar o banco e as tabelas.
+
+3. Configure suas credenciais em `src/main/java/com/clinicavet/util/Conexao.java`:
+   ```java
+   private static final String USUARIO = "root";
+   private static final String SENHA = "sua_senha";
+   ```
+
+4. Abra o projeto no IntelliJ (`File → Open` → selecione a pasta com o `pom.xml`).
+
+5. Execute a classe `Main.java`.
+
+A `Main` simula o fluxo completo: cria um tutor, cadastra animais vinculados a ele, registra consultas e demonstra as validações de negócio (consulta para animal inexistente e valor negativo).
+
+---
+
+## 📌 Status do projeto
+
+Projeto acadêmico finalizado, desenvolvido para fins de aprendizado de **JDBC**, **MVC** e **SQL** com Java.
+
+---
+
+## 👤 Autor
+
+Desenvolvido por **Alisson** — estudante da UMFG Faculdade.
